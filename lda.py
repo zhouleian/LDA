@@ -90,7 +90,7 @@ class LDAModel(object):
         # nwsum,每个topic的词的总数，K*1的向量，nwsum[z] 表示主题z中包含的词语的个数
         # nd,每个doc中各个topic的词的总数，M*K的矩阵,nd[d][z]表示文档d中被分配到主题z的词的个数
         # ndsum,每个doc中词的总数，M*1的向量，ndsum[d]表示文档d中包含的词的个数
-        self.p = np.zeros(self.K)
+        #self.p = np.zeros(self.K)
         self.nw = np.zeros((self.dpre.words_count, self.K), dtype="int")
         self.nwsum = np.zeros(self.K, dtype="int")
         self.nd = np.zeros((self.dpre.docs_count, self.K), dtype="int")
@@ -102,7 +102,7 @@ class LDAModel(object):
         # 随机为文档中的词语分配主题，更新计数向量ndsum,nwsum, 计数矩阵nd，nw
         for d in xrange(len(self.Z)):
             self.ndsum[d] = self.dpre.docs[d].length #因为是初始化为0的矩阵，所以文档d包含的词个数等于文档的词个数
-            for w in xrange(self.dpre.docs[d].length): #对于文档d中的每一个词
+            for w in xrange(self.dpre.docs[d].length):
                 #从主题编号0-K-1中随机选取一个主题
                 topic = random.randint(0, self.K - 1)
                 self.Z[d][w] = topic
@@ -125,10 +125,10 @@ class LDAModel(object):
         self.nw[word][topic] -= 1
         self.nd[d][topic] -= 1
         self.nwsum[topic] -= 1
-        self.ndsum[w] -= 1
+        self.ndsum[d] -= 1
 
-        self.p = self.computeTransProb(d,w)
-        newTopic = self.multSample(self.p)
+        p = self.computeTransProb(d,w)
+        newTopic = self.multSample(p)
 
         self.nw[word][newTopic] += 1
         self.nwsum[newTopic] += 1
@@ -146,20 +146,21 @@ class LDAModel(object):
         Wbeta = self.dpre.words_count * self.beta
         Kalpha = self.K * self.alpha
         word = self.dpre.docs[d].words[w] #对应位置的词的ID
-        self.p = (self.nw[word] + self.beta) / (self.nwsum + Wbeta) * \
+        p = np.zeros(self.K)
+        p = (self.nw[word] + self.beta) / (self.nwsum + Wbeta) * \
                  (self.nd[d] + self.alpha) / (self.ndsum[d] + Kalpha)
-        return self.p
+        return p
     def multSample(self,proList):
         """
         从多项分布中proList采样，proList表示剔除当前词之后的主题分布
         :param proList: 多项分布，在这里是马尔可夫传递概率
         """
         for k in xrange(1, self.K):
-            self.p[k] += self.p[k - 1]
+            proList[k] += proList[k-1]
         newTopic = 0
-        u = random.uniform(0, self.p[self.K - 1])
+        u = random.uniform(0, proList[self.K - 1])
         for topic in xrange(self.K):
-            if self.p[topic] > u:
+            if proList[topic] > u:
                 newTopic = topic
                 break
         return newTopic
